@@ -95,7 +95,7 @@ from itertools import chain
 
 from mininet.cli import CLI
 from mininet.log import info, error, debug, output
-from mininet.node import Host, OVSKernelSwitch, Controller
+from mininet.node import Host, MiddleBox, Switch, OVSKernelSwitch, Controller
 from mininet.link import Link, Intf
 from mininet.util import quietRun, fixLimits, numCores, ensureRoot
 from mininet.util import macColonHex, ipStr, ipParse, netParse, ipAdd
@@ -107,8 +107,8 @@ VERSION = "2.1.0+"
 class Mininet( object ):
     "Network emulation with hosts spawned in network namespaces."
 
-    def __init__( self, topo=None, switch=OVSKernelSwitch, host=Host,
-                  controller=Controller, link=Link, intf=Intf,
+    def __init__( self, topo=None, switch=OVSKernelSwitch, host=Host, 
+                  middlebox=MiddleBox, controller=Controller, link=Link, intf=Intf,
                   build=True, xterms=False, cleanup=False, ipBase='10.0.0.0/8',
                   inNamespace=False,
                   autoSetMacs=False, autoStaticArp=False, autoPinCpus=False,
@@ -117,6 +117,7 @@ class Mininet( object ):
            topo: Topo (topology) object or None
            switch: default Switch class
            host: default Host class/constructor
+           middlebox: default MiddleBox class/constructor
            controller: default Controller class/constructor
            link: default Link class/constructor
            intf: default Intf class/constructor
@@ -133,6 +134,7 @@ class Mininet( object ):
         self.topo = topo
         self.switch = switch
         self.host = host
+        self.middlebox = middlebox
         self.controller = controller
         self.link = link
         self.intf = intf
@@ -150,10 +152,11 @@ class Mininet( object ):
         self.listenPort = listenPort
 
         self.hosts = []
+        self.middleboxes = []
         self.switches = []
         self.controllers = []
 
-        self.nameToNode = {}  # name to Node (Host/Switch) objects
+        self.nameToNode = {}  # name to Node (Host/MiddleBox/Switch) objects
 
         self.terms = []  # list of spawned xterm processes
 
@@ -187,6 +190,21 @@ class Mininet( object ):
         self.hosts.append( h )
         self.nameToNode[ name ] = h
         return h
+
+    def addMiddleBox( self, name, cls=None, **params ):
+        """Add MiddleBox.
+           name: name of middlebox to add
+           cls: custom middlebox class/constructor (optional)
+           params: parameters for middlebox
+           returns: added middlebox"""
+        defaults = {}
+        defaults.update( params )
+        if not cls:
+            cls = self.middlebox
+        m = cls( name, **defaults )
+        self.middleboxes.append( m )
+        self.nameToNode[ name ] = m
+        return m
 
     def addSwitch( self, name, cls=None, **params ):
         """Add switch.
@@ -246,13 +264,14 @@ class Mininet( object ):
 
     def __iter__( self ):
         "return iterator over node names"
-        for node in chain( self.hosts, self.switches, self.controllers ):
+        for node in chain( self.hosts, self.middleboxes, self.switches,
+                          self.controllers ):
             yield node.name
 
     def __len__( self ):
         "returns number of nodes in net"
-        return ( len( self.hosts ) + len( self.switches ) +
-                 len( self.controllers ) )
+        return ( len( self.hosts ) + len(self.middleboxes) + 
+                len( self.switches ) + len( self.controllers ) )
 
     def __contains__( self, item ):
         "returns True if net contains named node"
@@ -286,6 +305,19 @@ class Mininet( object ):
             cls = self.link
         return cls( node1, node2, **defaults )
 
+    def addLinkPair(self, node1, node2, port1a=None, port1b=None,
+                    port2a=None, port2b=None, cls=None, **params):
+        """"Add a link pair from node1 to node2
+            node1: source node
+            node2: dest node
+            port1a,b: source port on node1
+            port2a,b: dest port on node2
+            returns: link objects"""
+        return (self.addLink(node1, node2, port1a, port1b, cls,
+                             **params),
+                self.addLink(node1, node2, port2a, port2b, cls, 
+                             **params))
+
     def configHosts( self ):
         "Configure a set of hosts."
         for host in self.hosts:
@@ -303,6 +335,12 @@ class Mininet( object ):
             # This may not be the right place to do this, but
             # it needs to be done somewhere.
             host.cmd( 'ifconfig lo up' )
+        info( '\n' )
+
+    def configMiddleboxes( self ):
+        "Configure a set of middleboxes."
+        for middlebox in self.middleboxes:
+            info( middlebox.name + ' ' )
         info( '\n' )
 
     def buildFromTopo( self, topo=None ):
@@ -331,6 +369,11 @@ class Mininet( object ):
             self.addHost( hostName, **topo.nodeInfo( hostName ) )
             info( hostName + ' ' )
 
+        info( '\n*** Adding middleboxes:\n' )
+        for middleboxName in topo.middleboxes():
+            self.addMiddleBox( middleboxName, **topo.nodeInfo( middleboxName ) )
+            info( middleboxName + ' ' )
+
         info( '\n*** Adding switches:\n' )
         for switchName in topo.switches():
             self.addSwitch( switchName, **topo.nodeInfo( switchName) )
@@ -341,9 +384,17 @@ class Mininet( object ):
             src, dst = self.nameToNode[ srcName ], self.nameToNode[ dstName ]
             params = topo.linkInfo( srcName, dstName )
             srcPort, dstPort = topo.port( srcName, dstName )
-            self.addLink( src, dst, srcPort, dstPort, **params )
-            info( '(%s, %s) ' % ( src.name, dst.name ) )
-
+            assert len(srcPort) == len(dstPort)
+            for i in range(len(srcPort)):
+                self.addLink( src, dst, srcPort[i], dstPort[i], **params )
+                if len(srcPort) > 1: #mb-sw link
+                    if isinstance(src,Switch):
+                        src.cmd('ovs-ofctl mod-port %s %u noflood'
+                                %(srcName, srcPort[i]))
+                    elif isinstance(dst,Switch):
+                        dst.cmd('ovs-ofctl mod-port %s %u noflood' 
+                                %(dstName, dstPort[i]))
+                info( '(%s, %s) ' % ( src.name, dst.name ) )
         info( '\n' )
 
     def configureControlNetwork( self ):
@@ -359,6 +410,8 @@ class Mininet( object ):
             self.configureControlNetwork()
         info( '*** Configuring hosts\n' )
         self.configHosts()
+        info( '*** Configuring middleboxes\n' )
+        self.configMiddleboxes()
         if self.xterms:
             self.startTerms()
         if self.autoStaticArp:
@@ -375,6 +428,7 @@ class Mininet( object ):
         self.terms += makeTerms( self.controllers, 'controller' )
         self.terms += makeTerms( self.switches, 'switch' )
         self.terms += makeTerms( self.hosts, 'host' )
+        self.terms += makeTerms( self.middleboxes, 'middlebox' )
 
     def stopXterms( self ):
         "Kill each xterm."
@@ -396,10 +450,14 @@ class Mininet( object ):
         info( '*** Starting controller\n' )
         for controller in self.controllers:
             controller.start()
-        info( '*** Starting %s switches\n' % len( self.switches ) )
+        info( '\n*** Starting %s switches\n' % len( self.switches ) )
         for switch in self.switches:
             info( switch.name + ' ')
             switch.start( self.controllers )
+        info( '\n*** Starting %s middleboxes\n' % len( self.middleboxes ) )
+        for middlebox in self.middleboxes:
+            info( middlebox.name + ' ')
+            middlebox.start()
         info( '\n' )
 
     def stop( self ):
@@ -416,6 +474,11 @@ class Mininet( object ):
         for host in self.hosts:
             info( host.name + ' ' )
             host.terminate()
+        info( '\n' )
+        info( '*** Stopping %i middleboxes\n' % len( self.middleboxes ) )
+        for middlebox in self.middleboxes:
+            info( middlebox.name + ' ' )
+            middlebox.terminate()
         info( '\n' )
         info( '*** Stopping %i controllers\n' % len( self.controllers ) )
         for controller in self.controllers:

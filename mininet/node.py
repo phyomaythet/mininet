@@ -562,6 +562,45 @@ class Host( Node ):
     "A host is simply a Node"
     pass
 
+class MiddleBox( Node ):
+    "A middlebox is a Node that is running for traffic processing."
+
+    def __init__( self, name, inNamespace=True, command='etherbridge',
+                 margs='-h -p', mdir=None, **params ):
+        self.command = command
+        self.margs = margs
+        self.mdir = mdir
+        Node.__init__( self, name, inNamespace=inNamespace, 
+                 **params )
+        self.checkFeature()
+
+    def checkFeature(self):
+        """Make sure the middlebox is full-functionable"""
+        # Verify that the command is installed successfully.
+        out, _err, returnCode = errRun( "which %s" %(self.command) )
+        if self.command not in out or returnCode != 0:
+            raise Exception( "Error to find %s for middlebox." 
+                            "please check that it is installed." 
+                            %(self.command))
+
+    def start( self ):
+        """Start <command> <args> on middlebox.
+           Log to /tmp/mN.log"""
+        pathCheck( self.command )
+        mout = '/tmp/' + self.name + '.log'
+        if self.mdir is not None:
+            self.cmd( 'cd ' + self.mdir )
+        intfs = self.intfNames()
+        if len(intfs)>=2:
+            self.cmd( self.command + ' -i '+intfs[0]+' -I '+intfs[1]+' ' 
+                     + self.margs + ' 1>' + mout + ' 2>' + mout + '&' )
+        self.execed = False
+
+    def stop( self ):
+        "Stop middlebox functions."
+        self.cmd( 'kill %' + self.command )
+        self.terminate()
+
 
 class CPULimitedHost( Host ):
 

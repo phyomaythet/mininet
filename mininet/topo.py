@@ -48,16 +48,18 @@ class MultiGraph( object ):
 class Topo(object):
     "Data center network representation for structured multi-trees."
 
-    def __init__(self, hopts=None, sopts=None, lopts=None):
+    def __init__(self, hopts=None, sopts=None, mopts=None, lopts=None):
         """Topo object:
            hinfo: default host options
            sopts: default switch options
+           mopts: default middlebox options
            lopts: default link options"""
         self.g = MultiGraph()
         self.node_info = {}
         self.link_info = {}  # (src, dst) tuples hash to EdgeInfo objects
         self.hopts = {} if hopts is None else hopts
         self.sopts = {} if sopts is None else sopts
+        self.mopts = {} if mopts is None else mopts
         self.lopts = {} if lopts is None else lopts
         self.ports = {}  # ports[src][dst] is port on src that connects to dst
 
@@ -89,6 +91,15 @@ class Topo(object):
         result = self.addNode(name, isSwitch=True, **opts)
         return result
 
+    def addMiddleBox(self, name, **opts):
+        """Convenience method: Add a middlebox to graph.
+           name: middlebox name
+           opts: middlebox options
+           returns: middlebox name"""
+        if not opts and self.mopts:
+            opts = self.mopts
+        return self.addNode(name, isMiddlebox=True, **opts)
+
     def addLink(self, node1, node2, port1=None, port2=None,
                 **opts):
         """node1, node2: nodes to link together
@@ -102,6 +113,21 @@ class Topo(object):
         self.link_info[key] = opts
         self.g.add_edge(*key)
         return key
+
+    def addLinkPair(self, node1, node2, port1a=None, 
+                    port1b=None, port2a=None, port2b=None,
+                    **opts):
+        """Add a pair of links, especially for a middlebox node.
+           node1, node2: nodes to link together
+           port1a, port1b, port2a, port2b: ports (optional)
+           opts: link options (optional)
+           returns: link info key"""
+        r = []
+        r.append(self.addLink(node1, node2, 
+                              port1a, port2a, **opts))
+        r.append(self.addLink(node1, node2, 
+                              port1b, port2b, **opts))
+        return r
 
     def addPort(self, src, dst, sport=None, dport=None):
         '''Generate port mapping for new edge.
@@ -117,8 +143,12 @@ class Topo(object):
             sport = len(self.ports[src]) + src_base
         if dport is None:
             dport = len(self.ports[dst]) + dst_base
-        self.ports[src][dst] = sport
-        self.ports[dst][src] = dport
+        if dst not in self.ports[src]:
+            self.ports[src][dst] = []
+        if src not in self.ports[dst]:
+            self.ports[dst][src] = []
+        self.ports[src][dst].append(sport)
+        self.ports[dst][src].append(dport)
 
     def nodes(self, sort=True):
         "Return nodes in graph"
@@ -132,6 +162,11 @@ class Topo(object):
         info = self.node_info[n]
         return info and info.get('isSwitch', False)
 
+    def isMiddlebox(self, n):
+        '''Returns true if node is a middlebox.'''
+        info = self.node_info[n]
+        return info and info.get('isMiddlebox', False)
+
     def switches(self, sort=True):
         '''Return switches.
         sort: sort switches alphabetically
@@ -144,7 +179,14 @@ class Topo(object):
         sort: sort hosts alphabetically
         @return dpids list of dpids
         '''
-        return [n for n in self.nodes(sort) if not self.isSwitch(n)]
+        return [n for n in self.nodes(sort) if not self.isSwitch(n) and not self.isMiddlebox(n)]
+
+    def middleboxes(self, sort=True):
+        '''Return middleboxes.
+        sort: sort middleboxes alphabetically
+        @return dpids list of dpids
+        '''
+        return [n for n in self.nodes(sort) if self.isMiddlebox(n)]
 
     def links(self, sort=True):
         '''Return links.
