@@ -380,10 +380,11 @@ class Mininet( object ):
             info( switchName + ' ' )
 
         info( '\n*** Adding links:\n' )
-        for srcName, dstName in topo.links(sort=True):
+        nodePairs = sorted(list(set(topo.links())))
+        for srcName, dstName in nodePairs:
             src, dst = self.nameToNode[ srcName ], self.nameToNode[ dstName ]
             params = topo.linkInfo( srcName, dstName )
-            srcPort, dstPort = topo.port( srcName, dstName )
+            srcPort, dstPort = topo.ports( srcName, dstName )
             assert len(srcPort) == len(dstPort)
             for i in range(len(srcPort)):
                 self.addLink( src, dst, srcPort[i], dstPort[i], **params )

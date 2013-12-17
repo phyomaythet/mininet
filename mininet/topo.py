@@ -61,7 +61,7 @@ class Topo(object):
         self.sopts = {} if sopts is None else sopts
         self.mopts = {} if mopts is None else mopts
         self.lopts = {} if lopts is None else lopts
-        self.ports = {}  # ports[src][dst] is port on src that connects to dst
+        self.portDic = {}  # portDic[src][dst] is port on src that connects to dst
 
     def addNode(self, name, **opts):
         """Add Node to graph.
@@ -134,21 +134,21 @@ class Topo(object):
         @param src source switch name
         @param dst destination switch name
         '''
-        self.ports.setdefault(src, {})
-        self.ports.setdefault(dst, {})
+        self.portDic.setdefault(src, {})
+        self.portDic.setdefault(dst, {})
         # New port: number of outlinks + base
         src_base = 1 if self.isSwitch(src) else 0
         dst_base = 1 if self.isSwitch(dst) else 0
         if sport is None:
-            sport = len(self.ports[src]) + src_base
+            sport = len(self.portDic[src]) + src_base
         if dport is None:
-            dport = len(self.ports[dst]) + dst_base
-        if dst not in self.ports[src]:
-            self.ports[src][dst] = []
-        if src not in self.ports[dst]:
-            self.ports[dst][src] = []
-        self.ports[src][dst].append(sport)
-        self.ports[dst][src].append(dport)
+            dport = len(self.portDic[dst]) + dst_base
+        if dst not in self.portDic[src]:
+            self.portDic[src][dst] = []
+        if src not in self.portDic[dst]:
+            self.portDic[dst][src] = []
+        self.portDic[src][dst].append(sport)
+        self.portDic[dst][src].append(dport)
 
     def nodes(self, sort=True):
         "Return nodes in graph"
@@ -199,18 +199,18 @@ class Topo(object):
             links = [tuple(self.sorted(e)) for e in self.g.edges()]
             return sorted( links, key=naturalSeq )
 
-    def port(self, src, dst):
-        '''Get port number.
+    def ports(self, src, dst):
+        '''Get port numbers.
 
-        @param src source switch name
-        @param dst destination switch name
-        @return tuple (src_port, dst_port):
-            src_port: port on source switch leading to the destination switch
-            dst_port: port on destination switch leading to the source switch
+        @param src source node name
+        @param dst destination node name
+        @return tuple (src_ports, dst_ports):
+            src_ports: ports on source switch leading to the destination switch
+            dst_ports: ports on destination switch leading to the source switch
         '''
-        if src in self.ports and dst in self.ports[src]:
-            assert dst in self.ports and src in self.ports[dst]
-            return (self.ports[src][dst], self.ports[dst][src])
+        if src in self.portDic and dst in self.portDic[src]:
+            assert dst in self.portDic and src in self.portDic[dst]
+            return (self.portDic[src][dst], self.portDic[dst][src])
 
     def linkInfo( self, src, dst ):
         "Return link metadata"
