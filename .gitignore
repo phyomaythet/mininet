@@ -1,4 +1,8 @@
 mnexec
+ether_bridge
+tags
+*.o
+*.d
 *.pyc
 *~
 *.1

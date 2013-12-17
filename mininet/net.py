@@ -389,10 +389,10 @@ class Mininet( object ):
             for i in range(len(srcPort)):
                 self.addLink( src, dst, srcPort[i], dstPort[i], **params )
                 if len(srcPort) > 1: #mb-sw link
-                    if isinstance(src,Switch):
+                    if isinstance(src, Switch):
                         src.cmd('ovs-ofctl mod-port %s %u noflood'
                                 %(srcName, srcPort[i]))
-                    elif isinstance(dst,Switch):
+                    elif isinstance(dst, Switch):
                         dst.cmd('ovs-ofctl mod-port %s %u noflood' 
                                 %(dstName, dstPort[i]))
                 info( '(%s, %s) ' % ( src.name, dst.name ) )

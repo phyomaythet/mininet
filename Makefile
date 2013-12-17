@@ -5,6 +5,8 @@ MN = bin/mn
 BIN = $(MN)
 PYSRC = $(MININET) $(TEST) $(EXAMPLES) $(BIN)
 MNEXEC = mnexec
+EBDIR = util/ether_bridge
+EB = $(EBDIR)/etherbridge
 MANPAGES = mn.1 mnexec.1
 P8IGN = E251,E201,E302,E202
 BINDIR = /usr/bin
@@ -18,6 +20,7 @@ all: codecheck test
 
 clean:
 	rm -rf build dist *.egg-info *.pyc $(MNEXEC) $(MANPAGES) $(DOCDIRS)
+	cd $(EBDIR) && $(MAKE) clean ||exit 1
 
 codecheck: $(PYSRC)
 	-echo "Running code check"
@@ -39,8 +42,12 @@ test: $(MININET) $(TEST)
 mnexec: mnexec.c $(MN) mininet/net.py
 	cc $(CFLAGS) $(LDFLAGS) -DVERSION=\"`PYTHONPATH=. $(MN) --version`\" $< -o $@
 
-install: $(MNEXEC) $(MANPAGES)
+$(EB):
+	cd $(EBDIR) && $(MAKE) all ||exit 1
+
+install: $(MNEXEC) $(EB) $(MANPAGES)
 	install $(MNEXEC) $(BINDIR)
+	install $(EB) $(BINDIR)
 	install $(MANPAGES) $(MANDIR)
 	python setup.py install
 
