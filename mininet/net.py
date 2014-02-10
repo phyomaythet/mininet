@@ -198,6 +198,9 @@ class Mininet( object ):
            params: parameters for middlebox
            returns: added middlebox"""
         defaults = {}
+        if self.autoSetMacs:
+            defaults[ 'mac'] = macColonHex( self.nextIP )
+        self.nextIP += 1
         defaults.update( params )
         if not cls:
             cls = self.middlebox
@@ -341,6 +344,12 @@ class Mininet( object ):
         "Configure a set of middleboxes."
         for middlebox in self.middleboxes:
             info( middlebox.name + ' ' )
+            intf = middlebox.defaultIntf()
+            if intf:
+                middlebox.configDefault()
+            else:
+                # Don't configure nonexistent intf
+                middlebox.configDefault( ip=None, mac=None )
         info( '\n' )
 
     def buildFromTopo( self, topo=None ):
