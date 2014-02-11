@@ -12,9 +12,8 @@
 #include <unistd.h>
 #include <pthread.h>
 
-#include "hdrs.h"
+#include "headers.h"
 
-int _DEBUG_=0;
 char *dev = NULL;						/* capture device1 name */
 char *dev2 = NULL;						/* capture device2 name */
 

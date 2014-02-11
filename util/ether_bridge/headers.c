@@ -175,7 +175,9 @@ int parse_pkt(const u_char *packet,int hide_header,int hide_payload){
     }else if(ntohs(ethernet->ether_type)==0x0806) {
         return parse_arp(packet,hide_header,hide_payload);
     } else {
-        printf("Unknown  Ethernet packet.\n");
+        if (_DEBUG_) {
+            printf("Unknown  Ethernet packet.\n");
+        }
         return -1;
     }
 
@@ -204,13 +206,19 @@ int parse_ip(const u_char *packet,int hide_header,int hide_payload){
             parse_udp(packet,ip,size_ip,hide_header,hide_payload);
             break;
         case IPPROTO_ICMP:
-            printf("ICMP Pkt: %s --> %s\n", inet_ntoa(ip->ip_src), inet_ntoa(ip->ip_dst));
+            if (_DEBUG_) {
+                printf("ICMP Pkt: %s --> %s\n", inet_ntoa(ip->ip_src), inet_ntoa(ip->ip_dst));
+            }
             break;
         case IPPROTO_IP:
-            printf("IP Pkt: %s --> %s\n", inet_ntoa(ip->ip_src), inet_ntoa(ip->ip_dst));
+            if (_DEBUG_) {
+                printf("IP Pkt: %s --> %s\n", inet_ntoa(ip->ip_src), inet_ntoa(ip->ip_dst));
+            }
             break;
         default:
-            printf("Unknown header=0x%x\n",ip->ip_p);
+            if (_DEBUG_) {
+                printf("Unknown header=0x%x\n",ip->ip_p);
+            }
     }
     return size_ip;
 }
@@ -223,9 +231,11 @@ int parse_arp(const u_char *packet,int hide_header,int hide_payload){
 
     struct arphdr *arpheader = NULL;       /* Pointer to the ARP header              */ 
     arpheader = (struct arphdr *)(packet+14); /* Point to the ARP header */ 
-    printf("Hardware type: %s\n", (ntohs(arpheader->htype) == 1) ? "Ethernet" : "Unknown"); 
-    printf("Protocol type: %s\n", (ntohs(arpheader->ptype) == 0x0800) ? "IPv4" : "Unknown"); 
-    printf("Operation: %s\n", (ntohs(arpheader->oper) == ARP_REQUEST)? "ARP Request" : "ARP Reply"); 
+    if (_DEBUG_) {
+        printf("Hardware type: %s\n", (ntohs(arpheader->htype) == 1) ? "Ethernet" : "Unknown"); 
+        printf("Protocol type: %s\n", (ntohs(arpheader->ptype) == 0x0800) ? "IPv4" : "Unknown"); 
+        printf("Operation: %s\n", (ntohs(arpheader->oper) == ARP_REQUEST)? "ARP Request" : "ARP Reply"); 
+    }
     return (ntohs(arpheader->oper) == ARP_REQUEST)? -1 : 1;
 }
 

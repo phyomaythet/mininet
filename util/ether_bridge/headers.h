@@ -7,6 +7,12 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>
+
+/* debug flag will output more run-time information */
+#ifndef _DEBUG_ 
+#define _DEBUG_ 0
+#endif
+
 /* ethernet headers are always exactly 14 bytes  */
 #ifndef SIZE_ETHERNET
 #define SIZE_ETHERNET 14
